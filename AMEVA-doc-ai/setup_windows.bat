@@ -2,156 +2,129 @@
 setlocal enabledelayedexpansion
 chcp 65001 > nul
 color 0E
-title AMEVA Doc AI - Ultimate Supreme Installer v10.0
+title AMEVA Doc AI - Ultimate Ironclad Installer v13.0
 
 :: 변수 초기화
 set "NEED_REBOOT=NO"
 set "OLLAMA_EXE=ollama"
 
 echo.
-echo    █████╗ ███╗   ███╗███████╗██╗   ██╗ █████╗ 
-echo   ██╔══██╗████╗ ████║██╔════╝██║   ██║██╔══██╗
-echo   ███████║██╔████╔██║█████╗  ██║   ██║███████║
-echo   ██╔══██║██║╚██╔╝██║██╔══╝  ╚██╗ ██╔╝██╔══██║
-echo   ██║  ██║██║ ╚═╝ ██║███████╗ ╚████╔╝ ██║  ██║
-echo   ╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝  ╚═══╝  ╚═╝  ╚═╝
-echo  ─────────────────────────────────────────────────────
-echo   [ SYSTEM ] PRE-FLIGHT CHECK AND AUTO-DEPLOYMENT
-echo  ─────────────────────────────────────────────────────
+echo    #####################################################
+echo    #                                                   #
+echo    #   A M E V A   D O C   A I   I N S T A L L E R     #
+echo    #                                                   #
+echo    #####################################################
+echo.
+echo    [ SYSTEM ] SECURITY POLICY, PATH REPAIR AND DEPLOY
+echo    -----------------------------------------------------
 echo.
 
-:: 0. 파워쉘 실행 권한 해제
-powershell -Command "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force"
+:: 0. 파워쉘 보안 정책 해제 (PowerShell 호출)
+echo  [STEP 0] 파워쉘 실행 권한 승인 시퀀스...
+powershell -Command "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force"
+echo  [OK] 보안 정책 해제 완료.
 
-:: -------------------------------------------------------
-:: [STEP 1] 파이썬 엔진 검사 및 설치
-:: -------------------------------------------------------
-echo  [STEP 1] 파이썬 엔진 (Python Engine)
+:: 1. 파이썬 엔진 검사
+echo.
+echo  [STEP 1] 파이썬 엔진 (Python Engine) 확인 중
 python --version >nul 2>&1
 if !errorlevel! neq 0 (
-    echo  [!] 파이썬이 없습니다. 시스템 이식을 시작합니다...
+    echo  [!] 파이썬 엔진 미감지. 긴급 이식을 시작합니다...
     winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements --override "/quiet InstallAllUsers=1 PrependPath=1"
-    if !errorlevel! neq 0 (
-        color 0C & echo [ERROR] 파이썬 설치 실패! & pause & exit /b
-    )
     set "NEED_REBOOT=YES"
-    echo  [DONE] 엔진 장착 완료.
 ) else (
-    echo  [OK] 최적의 파이썬 엔진이 이미 가동 중입니다.
+    echo  [OK] 파이썬 엔진이 이미 대기 중입니다.
 )
 
-:: -------------------------------------------------------
-:: [STEP 2] 가상 환경(venv) 검사 및 구축
-:: -------------------------------------------------------
+:: 2. 가상 환경(venv) 구축
 echo.
 echo  [STEP 2] 가상 환경 기지 (Virtual Environment)
 if not exist venv (
-    echo  [!] venv 기지가 없습니다. 새로운 섹터를 구축합니다...
+    echo  [!] venv 기지 건설 중... 얍!
     python -m venv venv
-    echo  [DONE] 섹터 구축 완료.
-) else (
-    echo  [OK] 준비된 venv 기지가 감지되었습니다.
 )
-echo  [ACTION] 가상 환경 프로토콜 진입 중...
-call venv\Scripts\activate
+echo  [ACTION] 가상 환경 접속 중...
+:: 가상환경 활성화 시 에러 방지를 위해 경로 직접 호출
+call "%~dp0venv\Scripts\activate.bat"
 
-:: -------------------------------------------------------
-:: [STEP 3] 라이브러리 연쇄 스캔 및 무장
-:: -------------------------------------------------------
+:: 3. 라이브러리 연쇄 무장 (에러 방지를 위해 echo 단순화)
 echo.
 echo  [STEP 3] 필수 유닛 무장 (Library Components)
 python -m pip install --upgrade pip --quiet
-
-:: 호환성 보정용 세트업툴 체크
-pip show setuptools >nul 2>&1
-if !errorlevel! neq 0 (
-    echo  [ARMING] setuptools 영입 중...
-    pip install setuptools --quiet
-)
+pip install setuptools --quiet
 
 set "libs=PyQt6 reportlab ollama psutil GPUtil python-docx openpyxl python-pptx olefile"
 
 for %%i in (%libs%) do (
     pip show %%i >nul 2>&1
     if !errorlevel! equ 0 (
-        echo  [OK] %%i : 무장 상태 양호.
+        echo  [OK] %%i : 이미 장착됨
     ) else (
-        echo  [ARMING] %%i : 신규 유닛 장착 중...
+        echo  [ARMING] %%i : 신규 장착을 시작하겠숩니다...
         pip install %%i --quiet
-        echo  [DONE] %%i : 장착 성공.
+        echo  [DONE] %%i : 장착 성공!
     )
 )
 
-:: -------------------------------------------------------
-:: [STEP 4] 올라마 엔진 (Ollama Core)
-:: -------------------------------------------------------
+:: 4. 올라마 엔진 복구 및 서비스 기동
 echo.
-echo  [STEP 4] AI 심장 (Ollama Core Engine)
+echo  [STEP 4] AI 심장 (Ollama Core Fix)
 ollama --version >nul 2>&1
 if !errorlevel! neq 0 (
-    if exist "%LocalAppData%\Programs\Ollama\ollama.exe" (
-        set "OLLAMA_EXE=%LocalAppData%\Programs\Ollama\ollama.exe"
-        echo  [OK] 올라마 엔진이 이미 숨겨진 경로에 대기 중입니다.
+    set "OLLAMA_DIR=%LocalAppData%\Programs\Ollama"
+    if exist "!OLLAMA_DIR!\ollama.exe" (
+        set "OLLAMA_EXE=!OLLAMA_DIR!\ollama.exe"
+        echo  [FIX] 환경 변수 강제 등록 중...
+        powershell -Command "[System.Environment]::SetEnvironmentVariable('Path', $env:Path + ';$env:LocalAppData\Programs\Ollama', 'User')"
     ) else (
-        echo  [!] 심장이 멈춰 있습니다. 신규 엔진 이식 시작...
+        echo  [!] 엔진 미설치. 신규 설치를 시작합니다...
         winget install -e --id Ollama.Ollama --accept-source-agreements --accept-package-agreements
         set "NEED_REBOOT=YES"
         set "OLLAMA_EXE=%LocalAppData%\Programs\Ollama\ollama.exe"
-        echo  [DONE] 엔진 이식 완료.
     )
-) else (
-    echo  [OK] 올라마 엔진이 힘차게 고동치고 있습니다.
 )
 
-:: -------------------------------------------------------
-:: [STEP 5] AI 모델 소환 및 배치
-:: -------------------------------------------------------
+:: 올라마 서비스 기동
+powershell -Command "stop-process -name 'ollama*' -force -erroraction silentlycontinue"
+start /b "" "!OLLAMA_EXE!" serve
+timeout /t 3 > nul
+echo  [OK] AI 심장 박동 정상.
+
+:: 5. AI 모델 배치
 echo.
 echo  [STEP 5] AI 모델 배치 (AI Model Deployment)
-
-:: 모델 목록 임시 캐시
 "!OLLAMA_EXE!" list > models.tmp 2>&1
-
 set "targets=gemma2:2b qwen2.5:1.5b phi3:mini"
 for %%m in (%targets%) do (
     findstr /C:"%%m" models.tmp >nul 2>&1
     if !errorlevel! equ 0 (
-        echo  [OK] %%m : 이미 배치됨.
+        echo  [OK] %%m : 이미 소환됨
     ) else (
-        echo  [DEPLOY] %%m : 미배치 상태. 소환 프로토콜 시작...
+        echo  [DEPLOY] %%m : 소환술 시전 중... 얍!
         "!OLLAMA_EXE!" pull %%m
-        echo  [DONE] %%m : 배치 완료.
     )
 )
 del models.tmp
 
-:: -------------------------------------------------------
 :: 최종 시퀀스
-:: -------------------------------------------------------
 echo.
 color 0B
-echo  ─────────────────────────────────────────────────────
-echo   축하합니다! AMEVA Doc AI의 모든 무장이 완료되었습니다.
-echo  ─────────────────────────────────────────────────────
+echo  -----------------------------------------------------
+echo   모든 보안 정책 및 무장이 완료되었습니다!
+echo  -----------------------------------------------------
 echo.
 
 if "%NEED_REBOOT%"=="YES" (
-    echo  [NOTICE] 시스템 환경이 변경되었습니다. 재부팅을 권장합니다.
-    echo.
-    set /p REBOOT_NOW="지금 바로 컴퓨터를 재부팅하시겠습니까? (Y/N): "
+    echo  [NOTICE] 환경 변수 적용을 위해 재부팅이 필요합니다.
+    set /p REBOOT_NOW="지금 바로 재부팅하시겠습니까? (Y/N): "
     if /i "!REBOOT_NOW!"=="Y" (
-        echo  [BYE] 10초 뒤 시스템을 다시 시작합니다...
         shutdown /r /t 10 & exit /b
     )
 )
 
-echo  [READY] 현재 모든 준비가 완벽합니다.
-set /p RUN_NOW="지금 바로 AMEVA Doc AI를 기동할까요? (Y/N): "
+echo  [READY] 모든 준비가 끝났습니다.
+set /p RUN_NOW="지금 바로 AMEVA Doc AI를 기동하겠숩니까? (Y/N): "
 if /i "!RUN_NOW!"=="Y" (
-    echo  [EXEC] 메인 엔진 가동 시작!!! 🚀
     python main.py
 )
-
-echo.
-echo  설치 스크립트를 마칩니다.
 pause

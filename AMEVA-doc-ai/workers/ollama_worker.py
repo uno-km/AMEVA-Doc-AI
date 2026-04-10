@@ -1,6 +1,26 @@
 ﻿import subprocess, ollama
 from PyQt6.QtCore import QThread, pyqtSignal
 
+class ModelListWorker(QThread):
+    # 메인 창으로 모델 리스트(list)를 전달할 신호
+    models_signal = pyqtSignal(list)
+
+    def run(self):
+        try:
+            # 내 컴퓨터에 설치된 모델 목록 가져오기
+            response = ollama.list()
+            
+            # response['models'] 안에는 여러 정보가 들어있는데, 그중 'name'만 쏙 뽑아냅니다.
+            # 예: ['gemma2:2b', 'qwen2.5:1.5b']
+            model_names = [model['name'] for model in response.get('models', [])]
+            
+            # 결과 전달
+            self.models_signal.emit(model_names)
+        except Exception as e:
+            # Ollama가 안 켜져 있거나 오류가 나면 빈 리스트 전달
+            print(f"모델 목록 로드 실패: {e}")
+            self.models_signal.emit([])
+
 class OllamaInstallWorker(QThread):
     log_signal = pyqtSignal(str)
     finished_signal = pyqtSignal(bool)
