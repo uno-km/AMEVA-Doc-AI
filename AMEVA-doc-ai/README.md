@@ -1,5 +1,13 @@
 ﻿# AMEVA Doc AI
 
+## 🚀 초간단 설치 및 실행 (Windows)
+
+터미널(PowerShell)을 열고 아래 명령어를 복사해서 붙여넣기만 하면 모든 설치가 자동으로 끝납니다!
+
+```powershell
+git clone [https://github.com/uno-km/AMEVA-Doc-AI.git](https://github.com/uno-km/AMEVA-Doc-AI.git); cd AMEVA-Doc-AI; .\setup_windows.bat
+```
+
 Ollama 기반 오프라인 통합 문서 처리 및 AI 요약 애플리케이션입니다. 인터넷 연결 없이 로컬 환경에서 안전하게 문서를 변환하고 요약합니다.
 
 ## ✨ 주요 기능
