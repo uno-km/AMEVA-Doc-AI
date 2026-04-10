@@ -1,0 +1,9 @@
+PyQt6>=6.4.0
+reportlab>=3.6.12
+ollama>=0.1.7
+psutil>=5.9.0
+GPUtil>=1.4.0
+python-docx>=1.1.0
+openpyxl>=3.1.2
+python-pptx>=0.6.22
+olefile>=0.46
