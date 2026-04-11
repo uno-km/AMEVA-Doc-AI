@@ -76,6 +76,8 @@ if !errorlevel! neq 0 (
         set "OLLAMA_EXE=!OLLAMA_DIR!\ollama.exe"
         echo  [FIX] 환경 변수 강제 등록 중...
         powershell -Command "[System.Environment]::SetEnvironmentVariable('Path', $env:Path + ';$env:LocalAppData\Programs\Ollama', 'User')"
+        :: 2. 올라마에게 동시 처리(4개) 허가하기 (여기에 추가!)
+        powershell -Command "[System.Environment]::SetEnvironmentVariable('OLLAMA_NUM_PARALLEL', '8', 'User')"
     ) else (
         echo  [!] 엔진 미설치. 신규 설치를 시작합니다...
         winget install -e --id Ollama.Ollama --accept-source-agreements --accept-package-agreements

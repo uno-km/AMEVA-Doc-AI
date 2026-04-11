@@ -39,7 +39,8 @@ class DocumentParser:
                 try:
                     decompressed = zlib.decompress(data, -15)
                     decoded = decompressed.decode('utf-16le', errors='ignore')
-                    clean = re.sub(r'[^\uAC00-\uD7A3a-zA-Z0-9\s\.\,]', '', decoded)
+                    # [수정 1] HWP 정규식 완화: 필수 문장 부호(?!()[]"'%~:- 등)는 살려두기
+                    clean = re.sub(r'[^\uAC00-\uD7A3a-zA-Z0-9\s\.\,\?\!\-\(\)\[\]\"\'\%\:\/\~\=]', '', decoded)
                     text += clean + " "
                 except: pass
         return text
@@ -47,7 +48,21 @@ class DocumentParser:
     @staticmethod
     def _extract_docx(path):
         doc = docx.Document(path)
-        return "\n".join([p.text for p in doc.paragraphs])
+        texts = []
+        
+        # 1. 일반 문단 추출
+        for p in doc.paragraphs:
+            if p.text.strip():
+                texts.append(p.text.strip())
+                
+        # [수정 2] 2. 표(Table) 내부 텍스트 추출 추가
+        for table in doc.tables:
+            for row in table.rows:
+                row_data = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                if row_data:
+                    texts.append(" | ".join(row_data))
+                    
+        return "\n".join(texts)
 
     @staticmethod
     def _extract_excel(path):
@@ -65,5 +80,9 @@ class DocumentParser:
         texts = []
         for slide in prs.slides:
             for shape in slide.shapes:
-                if hasattr(shape, "text"): texts.append(shape.text)
+                # [수정 3] PPTX에서 더 안전하게 텍스트 프레임 확인
+                if hasattr(shape, "has_text_frame") and shape.has_text_frame:
+                    for paragraph in shape.text_frame.paragraphs:
+                        if paragraph.text.strip():
+                            texts.append(paragraph.text.strip())
         return "\n".join(texts)
