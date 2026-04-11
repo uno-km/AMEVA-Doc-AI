@@ -48,40 +48,24 @@ class DocumentParser:
     def _extract_docx(path):
         doc = docx.Document(path)
         texts = []
-        
-        # 1. 일반 문단 추출
         for p in doc.paragraphs:
-            if p.text.strip():
-                texts.append(p.text.strip())
-                
-        # 2. 표(Table) 완벽 평탄화 로직
+            if p.text.strip(): texts.append(p.text.strip())
+            
         for table in doc.tables:
             for row in table.rows:
                 row_data = []
-                seen_cells = set() # 병합된 셀 중복 추출 방지용 메모리
-                
+                seen_cells = set()
                 for cell in row.cells:
                     if cell in seen_cells:
-                        # 이미 읽은 병합 셀이라면, 마크다운 표 구조 유지를 위해 빈칸만 삽입
-                        row_data.append(" ") 
+                        row_data.append(" ")
                         continue
-                        
                     seen_cells.add(cell)
-
-                    # python-docx의 cell.text는 내부에 숨겨진 '중첩 표'의 텍스트까지 전부 긁어옵니다.
-                    # 마크다운 표가 깨지지 않도록 내부의 파이프(|)를 슬래시(/)로 바꾸고, 
-                    # 모든 종류의 줄바꿈(\n)을 띄어쓰기 한 칸으로 강제 압축(평탄화)합니다.
                     clean_text = cell.text.replace('|', '/').strip()
-                    clean_text = re.sub(r'\s+', ' ', clean_text) 
-                    
+                    clean_text = re.sub(r'\s+', ' ', clean_text)
                     row_data.append(clean_text if clean_text else " ")
-                
-                # 줄의 모든 칸이 비어있지 않은 경우에만 표에 추가
                 if any(cell.strip() for cell in row_data):
                     texts.append("| " + " | ".join(row_data) + " |")
-            
-            texts.append("") # 표 하나가 끝나면 줄바꿈 추가하여 다음 문단과 분리
-            
+            texts.append("")
         return "\n".join(texts)
 
     @staticmethod
