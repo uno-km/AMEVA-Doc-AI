@@ -39,7 +39,6 @@ class DocumentParser:
                 try:
                     decompressed = zlib.decompress(data, -15)
                     decoded = decompressed.decode('utf-16le', errors='ignore')
-                    # [수정 1] HWP 정규식 완화: 필수 문장 부호(?!()[]"'%~:- 등)는 살려두기
                     clean = re.sub(r'[^\uAC00-\uD7A3a-zA-Z0-9\s\.\,\?\!\-\(\)\[\]\"\'\%\:\/\~\=]', '', decoded)
                     text += clean + " "
                 except: pass
@@ -55,13 +54,34 @@ class DocumentParser:
             if p.text.strip():
                 texts.append(p.text.strip())
                 
-        # [수정 2] 2. 표(Table) 내부 텍스트 추출 추가
+        # 2. 표(Table) 완벽 평탄화 로직
         for table in doc.tables:
             for row in table.rows:
-                row_data = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-                if row_data:
-                    texts.append(" | ".join(row_data))
+                row_data = []
+                seen_cells = set() # 병합된 셀 중복 추출 방지용 메모리
+                
+                for cell in row.cells:
+                    if cell in seen_cells:
+                        # 이미 읽은 병합 셀이라면, 마크다운 표 구조 유지를 위해 빈칸만 삽입
+                        row_data.append(" ") 
+                        continue
+                        
+                    seen_cells.add(cell)
+
+                    # python-docx의 cell.text는 내부에 숨겨진 '중첩 표'의 텍스트까지 전부 긁어옵니다.
+                    # 마크다운 표가 깨지지 않도록 내부의 파이프(|)를 슬래시(/)로 바꾸고, 
+                    # 모든 종류의 줄바꿈(\n)을 띄어쓰기 한 칸으로 강제 압축(평탄화)합니다.
+                    clean_text = cell.text.replace('|', '/').strip()
+                    clean_text = re.sub(r'\s+', ' ', clean_text) 
                     
+                    row_data.append(clean_text if clean_text else " ")
+                
+                # 줄의 모든 칸이 비어있지 않은 경우에만 표에 추가
+                if any(cell.strip() for cell in row_data):
+                    texts.append("| " + " | ".join(row_data) + " |")
+            
+            texts.append("") # 표 하나가 끝나면 줄바꿈 추가하여 다음 문단과 분리
+            
         return "\n".join(texts)
 
     @staticmethod
@@ -80,7 +100,6 @@ class DocumentParser:
         texts = []
         for slide in prs.slides:
             for shape in slide.shapes:
-                # [수정 3] PPTX에서 더 안전하게 텍스트 프레임 확인
                 if hasattr(shape, "has_text_frame") and shape.has_text_frame:
                     for paragraph in shape.text_frame.paragraphs:
                         if paragraph.text.strip():
