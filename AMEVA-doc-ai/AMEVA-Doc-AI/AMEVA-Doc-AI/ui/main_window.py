@@ -74,7 +74,7 @@ class AmebaConverter(QWidget):
         self.timer.start(1000)
 
     def initUI(self):
-        self.setWindowTitle('AMEVA Doc AI v6.0')
+        self.setWindowTitle('AMEVA Doc AI v6.1')
         self.setFixedSize(650, 760)
         self.setStyleSheet("background-color: #0d0d0d; color: #e0e0e0; font-family: 'Consolas';")
         main_layout = QVBoxLayout()
@@ -270,7 +270,6 @@ class AmebaConverter(QWidget):
         dest = QFileDialog.getExistingDirectory(self, "저장")
         if not dest: return
         
-        # 프로세서(스레드) 개수 추출 (예: "4개" -> 4)
         selected_thread_count = int(self.thread_combo.currentText().replace("개", ""))
         
         files_data = [{'path': self.file_list_widget.item(i).data(Qt.ItemDataRole.UserRole), 'summarize': self.file_list_widget.item(i).checkState() == Qt.CheckState.Checked} for i in range(self.file_list_widget.count())]
