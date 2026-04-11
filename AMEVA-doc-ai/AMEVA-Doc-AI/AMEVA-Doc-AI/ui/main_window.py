@@ -1,10 +1,51 @@
 ﻿import os, psutil, GPUtil, ollama, subprocess, tempfile, urllib.request, urllib.parse, re, time
 from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, QHBoxLayout, QListWidget, QListWidgetItem, QProgressBar, QTextEdit, QFrame, QComboBox, QMessageBox, QInputDialog)
-from PyQt6.QtCore import QTimer, Qt, pyqtSlot, QThread, pyqtSignal
+from PyQt6.QtCore import QTimer, Qt, pyqtSlot, QThread, pyqtSignal, QRect, QPropertyAnimation
+from PyQt6.QtGui import QFont
 from workers.converter_worker import ConverterWorker
 from workers.ollama_worker import OllamaInstallWorker, ModelListWorker
 from ui.model_manager import ModelManagerDialog
+
+class WorkerMinimi(QWidget):
+    def __init__(self, t_id):
+        super().__init__()
+        self.t_id = t_id
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+        
+        self.icon = QLabel("😴")
+        self.icon.setFont(QFont("Segoe UI Emoji", 16))
+        self.icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.label = QLabel(f"P-{t_id}")
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.label.setStyleSheet("color: #ccc; font-size: 7pt;")
+        
+        self.layout.addWidget(self.icon)
+        self.layout.addWidget(self.label)
+        self.setToolTip(f"P-{t_id}: 대기 중")
+        
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.animate_work)
+        self.working_state = 0
+
+    def set_working(self, working, current, total):
+        if working:
+            self.setToolTip(f"P-{self.t_id}: [{current}/{total}] 열심히 요약 중!")
+            self.setStyleSheet("background-color: rgba(41, 128, 185, 0.4); border-radius: 4px;")
+            self.timer.start(300)
+        else:
+            self.timer.stop()
+            self.icon.setText("✅")
+            self.setToolTip(f"P-{self.t_id}: [{current}/{total}] 완료/대기 중")
+            self.setStyleSheet("background-color: transparent;")
+            
+    def animate_work(self):
+        frames = ["🔨🤖", "⚡🤖"]
+        self.icon.setText(frames[self.working_state % 2])
+        self.working_state += 1
 
 class DownloadWorker(QThread):
     log_signal = pyqtSignal(str)
@@ -74,39 +115,41 @@ class AmebaConverter(QWidget):
         self.timer.start(1000)
 
     def initUI(self):
-        self.setWindowTitle('AMEVA Doc AI v6.1')
-        self.setFixedSize(650, 760)
+        self.setWindowTitle('AMEVA Doc AI v7.1 - Compact Factory')
+        self.setFixedSize(650, 660) # 노트북 해상도 최적화 (높이 대폭 축소)
         self.setStyleSheet("background-color: #0d0d0d; color: #e0e0e0; font-family: 'Consolas';")
         main_layout = QVBoxLayout()
-        main_layout.setSpacing(10)
+        main_layout.setSpacing(5) # 컴팩트한 간격
 
         diag_frame = QFrame()
-        diag_frame.setFixedHeight(120)
+        diag_frame.setFixedHeight(100) # 컴팩트 프레임
         diag_frame.setStyleSheet("background-color: #1a1a1a; border-radius: 8px; border: 1px solid #333;")
         diag_layout = QVBoxLayout(diag_frame)
-        diag_layout.setContentsMargins(10, 5, 10, 5)
+        diag_layout.setContentsMargins(10, 2, 10, 2)
+        
         self.spec_info = QLabel("시스템 분석 중...")
         
         model_selection_layout = QHBoxLayout()
         model_selection_layout.addWidget(QLabel("AI 엔진:"))
         self.model_combo = QComboBox()
-        self.model_combo.setStyleSheet("QComboBox { background-color: #222; color: white; border: 1px solid #444; padding: 3px; }")
+        self.model_combo.setStyleSheet("QComboBox { background-color: #222; color: white; border: 1px solid #444; padding: 2px; }")
         self.model_combo.currentIndexChanged.connect(self.analyze_model_suitability)
         model_selection_layout.addWidget(self.model_combo, 1)
         
-        model_selection_layout.addWidget(QLabel(" | 프로세서(스레드):"))
+        model_selection_layout.addWidget(QLabel(" | 스레드:"))
         self.thread_combo = QComboBox()
         self.thread_combo.addItems([f"{i}개" for i in range(1, 9)])
-        self.thread_combo.setCurrentIndex(1) # 기본값 2개
-        self.thread_combo.setStyleSheet("QComboBox { background-color: #222; color: white; border: 1px solid #444; padding: 3px; }")
+        self.thread_combo.setCurrentIndex(1)
+        self.thread_combo.setStyleSheet("QComboBox { background-color: #222; color: white; border: 1px solid #444; padding: 2px; }")
+        self.thread_combo.currentIndexChanged.connect(self.update_minimis)
         model_selection_layout.addWidget(self.thread_combo)
 
         self.btn_manage_models = QPushButton("모델 관리")
-        self.btn_manage_models.setStyleSheet("background-color: #27ae60; padding: 5px; min-width: 80px;")
+        self.btn_manage_models.setStyleSheet("background-color: #27ae60; padding: 3px; min-width: 60px;")
         self.btn_manage_models.clicked.connect(self.open_model_manager)
         model_selection_layout.addWidget(self.btn_manage_models)
 
-        self.status_light = QLabel("● 엔진 분석 대기 중")
+        self.status_light = QLabel("● 대기 중")
         diag_layout.addWidget(self.spec_info)
         diag_layout.addLayout(model_selection_layout)
         diag_layout.addWidget(self.status_light)
@@ -123,14 +166,42 @@ class AmebaConverter(QWidget):
         main_layout.addLayout(mon_layout)
 
         self.file_list_widget = QListWidget()
-        self.file_list_widget.setMaximumHeight(150)
-        self.file_list_widget.setStyleSheet("background-color: #222; border: 1px solid #444; padding: 5px;")
-        main_layout.addWidget(QLabel("작업 대기열 (체크된 항목 요약)"))
+        self.file_list_widget.setMaximumHeight(80) # 리스트 최소화
+        self.file_list_widget.setStyleSheet("background-color: #222; border: 1px solid #444; padding: 3px;")
+        main_layout.addWidget(QLabel("작업 대기열"))
         main_layout.addWidget(self.file_list_widget)
+
+        # ---------------------------------------------------------
+        # 미니미 팩토리 & 경찰 순찰 UI (컴팩트 버전)
+        # ---------------------------------------------------------
+        self.factory_frame = QFrame()
+        self.factory_frame.setFixedHeight(85)
+        self.factory_frame.setStyleSheet("background-color: #161616; border-radius: 8px; border: 1px solid #444;")
+        
+        self.police_label = QLabel("👮", self.factory_frame)
+        self.police_label.setFont(QFont("Segoe UI Emoji", 16))
+        self.police_label.setGeometry(10, 2, 30, 30)
+        self.police_label.setToolTip("순찰 경찰: 10초마다 순찰 중")
+        
+        self.police_anim = QPropertyAnimation(self.police_label, b"geometry")
+        self.police_anim.setDuration(10000)
+        self.police_anim.setKeyValueAt(0.0, QRect(10, 2, 30, 30))
+        self.police_anim.setKeyValueAt(0.5, QRect(590, 2, 30, 30))
+        self.police_anim.setKeyValueAt(1.0, QRect(10, 2, 30, 30))
+        self.police_anim.setLoopCount(-1)
+
+        self.workers_widget = QWidget(self.factory_frame)
+        self.workers_widget.setGeometry(10, 32, 600, 50)
+        self.workers_layout = QHBoxLayout(self.workers_widget)
+        self.workers_layout.setContentsMargins(0, 0, 0, 0)
+        self.worker_minimis = {}
+        
+        self.update_minimis()
+        main_layout.addWidget(self.factory_frame)
 
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
-        self.log_view.setMaximumHeight(200)
+        self.log_view.setMaximumHeight(130) # 로그 최소화
         self.log_view.setStyleSheet("background-color: #050505; color: #00ff00; font-size: 8pt; border: 1px solid #333;")
         main_layout.addWidget(self.log_view)
 
@@ -138,13 +209,13 @@ class AmebaConverter(QWidget):
         main_layout.addWidget(self.current_action)
 
         self.pbar = QProgressBar()
-        self.pbar.setFixedHeight(15)
+        self.pbar.setFixedHeight(12)
         main_layout.addWidget(self.pbar)
 
         btn_layout = QHBoxLayout()
         self.btn_add = QPushButton("파일 추가")
-        self.btn_add_link = QPushButton("링크로 넣기")
-        self.btn_clear = QPushButton("목록 초기화")
+        self.btn_add_link = QPushButton("링크 추가")
+        self.btn_clear = QPushButton("초기화")
         self.btn_run = QPushButton("AI 변환 시작")
         self.btn_run.setEnabled(False)
         self.btn_run.setStyleSheet("background-color: #333; color: #777; font-weight: bold;")
@@ -165,8 +236,27 @@ class AmebaConverter(QWidget):
         
         self.setLayout(main_layout)
 
+    def update_minimis(self):
+        for i in reversed(range(self.workers_layout.count())): 
+            widget = self.workers_layout.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
+                widget.deleteLater()
+        self.worker_minimis.clear()
+        
+        count = int(self.thread_combo.currentText().replace("개", ""))
+        for i in range(1, count + 1):
+            minimi = WorkerMinimi(i)
+            self.workers_layout.addWidget(minimi)
+            self.worker_minimis[i] = minimi
+
+    @pyqtSlot(int, bool, int, int)
+    def update_minimi_state(self, t_id, is_working, current, total):
+        if t_id in self.worker_minimis:
+            self.worker_minimis[t_id].set_working(is_working, current, total)
+
     def add_from_link(self):
-        url, ok = QInputDialog.getText(self, "링크 가져오기", "다운로드 URL (Google Drive/Sheets 지원):")
+        url, ok = QInputDialog.getText(self, "링크 가져오기", "다운로드 URL:")
         if ok and url.strip():
             self.download_worker = DownloadWorker(url.strip())
             self.download_worker.log_signal.connect(self.append_log_with_time)
@@ -271,14 +361,31 @@ class AmebaConverter(QWidget):
         if not dest: return
         
         selected_thread_count = int(self.thread_combo.currentText().replace("개", ""))
-        
         files_data = [{'path': self.file_list_widget.item(i).data(Qt.ItemDataRole.UserRole), 'summarize': self.file_list_widget.item(i).checkState() == Qt.CheckState.Checked} for i in range(self.file_list_widget.count())]
         self.btn_run.setEnabled(False)
+        
+        self.police_anim.start()
+        for m in self.worker_minimis.values():
+            m.icon.setText("😴")
+            m.setStyleSheet("background-color: transparent;")
+            m.setToolTip(f"P-{m.t_id}: 대기 중")
         
         self.worker = ConverterWorker(files_data, dest, model, thread_count=selected_thread_count)
         self.worker.progress_signal.connect(self.pbar.setValue)
         self.worker.log_signal.connect(self.append_log_with_time)
         self.worker.stream_signal.connect(lambda t: self.log_view.insertPlainText(t))
         self.worker.status_msg_signal.connect(self.current_action.setText)
-        self.worker.finished_signal.connect(lambda r: self.btn_run.setEnabled(True))
+        
+        self.worker.worker_state_signal.connect(self.update_minimi_state)
+        self.worker.finished_signal.connect(self.on_task_finished)
         self.worker.start()
+
+    @pyqtSlot(int)
+    def on_task_finished(self, success_count):
+        self.btn_run.setEnabled(True)
+        self.police_anim.stop()
+        self.police_label.setGeometry(10, 2, 30, 30)
+        for m in self.worker_minimis.values():
+            m.timer.stop()
+            m.icon.setText("🎉")
+            m.setStyleSheet("background-color: rgba(39, 174, 96, 0.4); border-radius: 4px;")

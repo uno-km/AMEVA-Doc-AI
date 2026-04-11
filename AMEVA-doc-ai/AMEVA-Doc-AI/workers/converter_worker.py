@@ -21,17 +21,15 @@ class PoliceWorker(QThread):
             time.sleep(10)
             if not self.running: break
             
-            self.log_signal.emit("<font color='#e67e22'>[경찰] 👮 진행점검중...</font>")
+            self.log_signal.emit("<font color='#e67e22'>[경찰] 👮 순찰 중 (10초 경과)...</font>")
             
             active_threads = 0
-            reports = [] # 각 프로세서별 상세 보고를 담을 리스트
+            reports = []
             
             for t_id, state in self.states.items():
                 if state['do']:
                     active_threads += 1
-                    # 현재 몇 번째 청크를 작업 중인지 리포트 생성 (예: P-1: [2/5] 작업중)
                     reports.append(f"P-{t_id}: [{state['current']}/{state['total']}]")
-                    
                     if time.time() - state['time'] > 300:
                         self.alert_signal.emit(f"프로세서 {t_id} 응답 없음 (작업 강제 중단)")
                         self.running = False
@@ -52,6 +50,9 @@ class ConverterWorker(QThread):
     stream_signal = pyqtSignal(str)
     status_msg_signal = pyqtSignal(str)
     finished_signal = pyqtSignal(int)
+    
+    # UI의 미니미 애니메이션을 제어하기 위한 전용 시그널 (thread_id, is_working, current_chunk, total_chunks)
+    worker_state_signal = pyqtSignal(int, bool, int, int)
 
     def __init__(self, files_data, dest, model, thread_count=2):
         super().__init__()
@@ -62,7 +63,6 @@ class ConverterWorker(QThread):
         self.thread_count = thread_count
         self.is_aborted = False
         
-        # 프로세서별 상태 (current: 현재 진행 중인 인덱스, total: 할당된 총 개수 추가)
         self.worker_states = {
             i: {'do': False, 'time': time.time(), 'chunk_id': -1, 'current': 0, 'total': 0} 
             for i in range(1, self.thread_count + 1)
@@ -117,17 +117,15 @@ class ConverterWorker(QThread):
                     chunks_per_thread = math.ceil(total_chunks / self.thread_count)
                     chunk_groups = []
                     
-                    # 각 프로세서에 할당량 지정
                     for i in range(self.thread_count):
                         start_idx = i * chunks_per_thread
                         end_idx = min(start_idx + chunks_per_thread, total_chunks)
                         if start_idx < total_chunks:
                             group = [(start_idx + j, chunks[start_idx + j]) for j in range(end_idx - start_idx)]
                             chunk_groups.append((i + 1, group))
-                            # 상태 객체에 본인이 처리해야 할 총 할당량(total) 저장!
                             self.worker_states[i + 1]['total'] = len(group)
                             
-                    self.log_signal.emit(f"📊 [요약] 총 {total_chars:,}자 | {total_chunks}개 청크를 {len(chunk_groups)}개 묶음으로 나누어 동시 처리합니다.")
+                    self.log_signal.emit(f"📊 [요약] 총 {total_chars:,}자 | {total_chunks}개 청크를 {len(chunk_groups)}개 묶음으로 분배 완료.")
                     
                     results_dict = {} 
                     completed_chunks = 0
@@ -136,17 +134,19 @@ class ConverterWorker(QThread):
                         nonlocal completed_chunks
                         thread_id, group = group_data
                         group_results = []
+                        total_in_group = len(group)
                         
-                        # 그룹 내의 청크를 순서대로 처리
                         for idx_in_group, (c_idx, c_text) in enumerate(group):
                             if self.is_aborted: break
                             
-                            # 경찰 보고용 상태 업데이트 (현재 n번째 작업 중)
+                            curr = idx_in_group + 1
                             self.worker_states[thread_id]['do'] = True
                             self.worker_states[thread_id]['time'] = time.time()
                             self.worker_states[thread_id]['chunk_id'] = c_idx
-                            self.worker_states[thread_id]['current'] = idx_in_group + 1
+                            self.worker_states[thread_id]['current'] = curr
                             
+                            # UI 미니미에게 일 시작했다고 알림
+                            self.worker_state_signal.emit(thread_id, True, curr, total_in_group)
                             self.stream_signal.emit(f"  ▶ [P-{thread_id}] 청크 {c_idx+1}/{total_chunks} ➔ 요약 중...\n")
 
                             res_text = ""
@@ -171,6 +171,9 @@ class ConverterWorker(QThread):
                             
                             self.worker_states[thread_id]['do'] = False
                             self.worker_states[thread_id]['time'] = time.time()
+                            
+                            # UI 미니미에게 이 청크는 끝났다고 알림
+                            self.worker_state_signal.emit(thread_id, False, curr, total_in_group)
 
                         return thread_id, group_results
 
