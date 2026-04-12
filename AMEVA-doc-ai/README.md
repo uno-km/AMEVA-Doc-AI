@@ -70,6 +70,7 @@ python main.py
 ```
 
 ## 📂 프로젝트 구조
+```plantext
 AMEVA-Doc-AI/
 │
 ├── core/                   # 핵심 파싱 및 PDF 렌더링 엔진
@@ -87,7 +88,7 @@ AMEVA-Doc-AI/
 ├── main.py                 # 애플리케이션 엔트리 포인트
 ├── requirements.txt        # 의존성 패키지 목록
 └── setup_windows.bat       # 원터치 오토 인스톨러 (보안 우회 및 환경변수 셋팅)
-
+```
 
 
 ## ⚠️ 유의 사항 및 트러블슈팅 (Troubleshooting)
