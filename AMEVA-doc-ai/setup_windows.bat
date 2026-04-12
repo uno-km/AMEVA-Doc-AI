@@ -19,7 +19,7 @@ echo    [ SYSTEM ] SECURITY POLICY, PATH REPAIR AND DEPLOY
 echo    -----------------------------------------------------
 echo.
 
-:: 0. 파워쉘 보안 정책 해제 (PowerShell 호출)
+:: 0. 파워쉘 보안 정책 해제
 echo  [STEP 0] 파워쉘 실행 권한 승인 시퀀스...
 powershell -Command "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force"
 echo  [OK] 보안 정책 해제 완료.
@@ -44,16 +44,15 @@ if not exist venv (
     python -m venv venv
 )
 echo  [ACTION] 가상 환경 접속 중...
-:: 가상환경 활성화 시 에러 방지를 위해 경로 직접 호출
 call "%~dp0venv\Scripts\activate.bat"
 
-:: 3. 라이브러리 연쇄 무장 (에러 방지를 위해 echo 단순화)
+:: 3. 라이브러리 연쇄 무장
 echo.
 echo  [STEP 3] 필수 유닛 무장 (Library Components)
 python -m pip install --upgrade pip --quiet
 pip install setuptools --quiet
 
-set "libs=PyQt6 reportlab ollama psutil GPUtil python-docx openpyxl python-pptx olefile"
+set "libs=PyQt6 reportlab ollama psutil GPUtil python-docx openpyxl python-pptx olefile edge-tts"
 
 for %%i in (%libs%) do (
     pip show %%i >nul 2>&1
@@ -66,18 +65,23 @@ for %%i in (%libs%) do (
     )
 )
 
-:: 4. 올라마 엔진 복구 및 서비스 기동
+:: 4. 올라마 엔진 복구 및 멀티프로세싱 환경변수 주입
 echo.
-echo  [STEP 4] AI 심장 (Ollama Core Fix)
+echo  [STEP 4] AI 심장 및 환경 변수 세팅 (Ollama Core Fix)
+
+:: ★ 수정됨: 환경변수 OLLAMA_NUM_PARALLEL 8개로 무조건 강제 고정!
+echo  [SETTING] Ollama 멀티프로세싱(8개) 환경 변수 영구 등록 중...
+setx OLLAMA_NUM_PARALLEL "8" >nul 2>&1
+set "OLLAMA_NUM_PARALLEL=8"
+echo  [OK] 환경 변수 세팅 완료.
+
 ollama --version >nul 2>&1
 if !errorlevel! neq 0 (
     set "OLLAMA_DIR=%LocalAppData%\Programs\Ollama"
     if exist "!OLLAMA_DIR!\ollama.exe" (
         set "OLLAMA_EXE=!OLLAMA_DIR!\ollama.exe"
-        echo  [FIX] 환경 변수 강제 등록 중...
+        echo  [FIX] 환경 변수 경로 강제 등록 중...
         powershell -Command "[System.Environment]::SetEnvironmentVariable('Path', $env:Path + ';$env:LocalAppData\Programs\Ollama', 'User')"
-        :: 2. 올라마에게 동시 처리(4개) 허가하기 (여기에 추가!)
-        powershell -Command "[System.Environment]::SetEnvironmentVariable('OLLAMA_NUM_PARALLEL', '8', 'User')"
     ) else (
         echo  [!] 엔진 미설치. 신규 설치를 시작합니다...
         winget install -e --id Ollama.Ollama --accept-source-agreements --accept-package-agreements
@@ -96,7 +100,7 @@ echo  [OK] AI 심장 박동 정상.
 echo.
 echo  [STEP 5] AI 모델 배치 (AI Model Deployment)
 "!OLLAMA_EXE!" list > models.tmp 2>&1
-set "targets=gemma2:2b qwen2.5:1.5b phi3:mini"
+set "targets=gemma2:2b qwen2.5:1.5b"
 for %%m in (%targets%) do (
     findstr /C:"%%m" models.tmp >nul 2>&1
     if !errorlevel! equ 0 (
@@ -127,6 +131,6 @@ if "%NEED_REBOOT%"=="YES" (
 echo  [READY] 모든 준비가 끝났습니다.
 set /p RUN_NOW="지금 바로 AMEVA Doc AI를 기동하겠숩니까? (Y/N): "
 if /i "!RUN_NOW!"=="Y" (
-    python main.py
+    "%~dp0venv\Scripts\python.exe" main.py
 )
 pause
