@@ -1,4 +1,6 @@
 # 🚀 AMEVA Doc AI v13.0 - Ultimate Offline Architect
+  <img width="1024" height="572" alt="image" src="https://github.com/user-attachments/assets/134fda04-e112-4728-b94f-e2558067d104" />
+
 
 <div align="center">
   <i>"인터넷이 끊겨도, 당신의 업무는 멈추지 않습니다."</i><br>
