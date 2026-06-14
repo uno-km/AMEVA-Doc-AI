@@ -52,7 +52,7 @@ echo  [STEP 3] 필수 유닛 무장 (Library Components)
 python -m pip install --upgrade pip --quiet
 pip install setuptools --quiet
 
-set "libs=PyQt6 reportlab ollama psutil GPUtil python-docx openpyxl python-pptx olefile edge-tts"
+set "libs=fastapi uvicorn python-multipart reportlab ollama psutil GPUtil python-docx openpyxl python-pptx olefile edge-tts"
 
 for %%i in (%libs%) do (
     pip show %%i >nul 2>&1
@@ -68,6 +68,13 @@ for %%i in (%libs%) do (
 :: 4. 올라마 엔진 복구 및 멀티프로세싱 환경변수 주입
 echo.
 echo  [STEP 4] AI 심장 및 환경 변수 세팅 (Ollama Core Fix)
+
+:: GPU / CPU 자가진단 및 모델 매핑
+powershell -Command "$hasNvidia = $false; Get-CimInstance Win32_VideoController | ForEach-Object { if ($_.Name -like '*NVIDIA*') { $hasNvidia = $true } }; if ($hasNvidia) { Write-Output 'GPU' } else { Write-Output 'CPU' }" > gpu_check.tmp
+set /p GPU_ENV=<gpu_check.tmp
+del gpu_check.tmp
+
+echo  [DETECTION] 하드웨어 감지 결과: !GPU_ENV! 모드로 설정합니다.
 
 :: ★ 수정됨: 환경변수 OLLAMA_NUM_PARALLEL 8개로 무조건 강제 고정!
 echo  [SETTING] Ollama 멀티프로세싱(8개) 환경 변수 영구 등록 중...
@@ -96,11 +103,17 @@ start /b "" "!OLLAMA_EXE!" serve
 timeout /t 3 > nul
 echo  [OK] AI 심장 박동 정상.
 
-:: 5. AI 모델 배치
+:: 5. AI 모델 배치 (CPU/GPU 맞춤형 자동 선택)
 echo.
 echo  [STEP 5] AI 모델 배치 (AI Model Deployment)
 "!OLLAMA_EXE!" list > models.tmp 2>&1
-set "targets=gemma2:2b qwen2.5:1.5b"
+
+if "!GPU_ENV!"=="GPU" (
+    set "targets=qwen2.5-coder:7b gemma2:2b"
+) else (
+    set "targets=qwen2.5:1.5b gemma2:2b"
+)
+
 for %%m in (%targets%) do (
     findstr /C:"%%m" models.tmp >nul 2>&1
     if !errorlevel! equ 0 (

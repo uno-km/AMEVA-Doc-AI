@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMEVA Doc AI v13.0 - Web Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Left Column: Dashboard & Main controls -->
+        <main class="left-panel">
+            <header class="header">
+                <h1>AMEVA Doc AI <span>v13.0 - Flawless Execution</span></h1>
+            </header>
+
+            <!-- Hardware Diagnostic Area -->
+            <section class="card spec-card">
+                <div class="spec-text" id="hardware-spec">시스템 분석 중...</div>
+                <div class="controls-row">
+                    <div class="control-group">
+                        <label for="model-select">AI 엔진</label>
+                        <select id="model-select">
+                            <option value="">불러오는 중...</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="thread-select">스레드</label>
+                        <select id="thread-select">
+                            <option value="1">1개</option>
+                            <option value="2" selected>2개</option>
+                            <option value="3">3개</option>
+                            <option value="4">4개</option>
+                            <option value="5">5개</option>
+                            <option value="6">6개</option>
+                            <option value="7">7개</option>
+                            <option value="8">8개</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-secondary" id="btn-model-manager">모델 관리</button>
+                </div>
+                <div class="status-indicator" id="status-indicator">● 대기 중</div>
+            </section>
+
+            <!-- Live Telemetry Monitor -->
+            <section class="card monitoring-card">
+                <div class="telemetry-item">
+                    <div class="bar-label">CPU</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="cpu-bar" style="width: 0%;"></div>
+                        <span class="progress-text" id="cpu-text">0%</span>
+                    </div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="bar-label">RAM</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="ram-bar" style="width: 0%;"></div>
+                        <span class="progress-text" id="ram-text">0%</span>
+                    </div>
+                </div>
+                <div class="telemetry-item">
+                    <div class="bar-label">GPU</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="gpu-bar" style="width: 0%;"></div>
+                        <span class="progress-text" id="gpu-text">0%</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Energy & Processing Stats -->
+            <section class="stats-panel">
+                <div class="stat-box">
+                    <span class="stat-icon">⏱️</span>
+                    <div class="stat-info">
+                        <div class="stat-val" id="stat-time">00:00</div>
+                        <div class="stat-lbl">경과 시간</div>
+                    </div>
+                </div>
+                <div class="stat-box energy">
+                    <span class="stat-icon">⚡</span>
+                    <div class="stat-info">
+                        <div class="stat-val" id="stat-power">0.0000 Wh (0.0W)</div>
+                        <div class="stat-lbl">추정 전력</div>
+                    </div>
+                </div>
+                <div class="stat-box tokens">
+                    <span class="stat-icon">🪙</span>
+                    <div class="stat-info">
+                        <div class="stat-val" id="stat-tokens">0 Tokens</div>
+                        <div class="stat-lbl">처리 토큰</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- File Queue -->
+            <section class="card queue-card">
+                <h3>작업 대기열 (클릭하여 결과 다운로드)</h3>
+                <div class="file-queue-container">
+                    <ul class="file-list" id="file-queue-list">
+                        <!-- Dynamic items -->
+                    </ul>
+                </div>
+                <div class="dest-group">
+                    <label for="dest-input">결과 저장 절대경로</label>
+                    <input type="text" id="dest-input" placeholder="예: C:\Users\User\Downloads" value="">
+                </div>
+            </section>
+
+            <!-- SRE Police & Worker Minimies Factory -->
+            <section class="card factory-card">
+                <div class="factory-header">
+                    <div class="police-path">
+                        <div class="police-badge" id="sre-police">👮</div>
+                    </div>
+                </div>
+                <div class="workers-wrapper" id="minimi-container">
+                    <!-- Dynamic worker icons -->
+                </div>
+            </section>
+
+            <!-- Multi-tab Log Terminal -->
+            <section class="card log-card">
+                <div class="log-tabs-header">
+                    <button class="log-tab active" data-tab="0" id="btn-main-log">📝 전체 로그</button>
+                    <div class="worker-tabs" id="worker-tabs-container">
+                        <!-- Dynamic tabs -->
+                    </div>
+                </div>
+                <div class="log-display-container">
+                    <div class="log-display active" id="log-view-main"></div>
+                    <div id="worker-log-views">
+                        <!-- Dynamic log displays -->
+                    </div>
+                </div>
+                <div class="log-footer">
+                    <div class="current-action" id="current-action">대기 중...</div>
+                    <div class="global-progress">
+                        <div class="progress-bar" id="global-progress-bar" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TTS Option -->
+            <div class="tts-option-row">
+                <input type="checkbox" id="cb-tts">
+                <label for="cb-tts">🎧 완료 후 요약본 오디오(MP3) 자동 생성 (VRAM 미사용)</label>
+            </div>
+
+            <!-- Action Trigger Row -->
+            <div class="action-buttons">
+                <button class="btn btn-primary" id="btn-add-files">파일 추가</button>
+                <button class="btn btn-primary" id="btn-add-link">링크 추가</button>
+                <button class="btn btn-secondary" id="btn-clear">초기화</button>
+                <button class="btn btn-accent" id="btn-run" disabled>AI 변환 시작</button>
+            </div>
+        </main>
+
+        <!-- Right Column: Document RAG Chat -->
+        <aside class="right-panel">
+            <div class="rag-header">
+                <h2>💬 문서와 대화하기 (RAG)</h2>
+            </div>
+            <div class="chat-display" id="chat-display">
+                <div class="chat-system-message">
+                    <i>[안내] 요약이 완료된 문서를 기반으로 AI에게 질문할 수 있습니다. VRAM 보호를 위해 요약 작업 중에는 채팅이 일시 차단됩니다.</i>
+                </div>
+            </div>
+            <div class="chat-input-row">
+                <input type="text" id="chat-input" placeholder="요약된 문서에 대해 질문하세요..." disabled>
+                <button class="btn btn-primary" id="btn-send-chat" disabled>전송</button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Hidden File Input -->
+    <input type="file" id="file-input-raw" multiple style="display: none;" accept=".hwp,.hwpx,.docx,.xlsx,.pptx">
+
+    <!-- Model Manager Modal -->
+    <div class="modal" id="modal-manager">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Ollama 모델 매니저</h2>
+                <button class="close-modal" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <table class="modal-table">
+                    <thead>
+                        <tr>
+                            <th>상태</th>
+                            <th>모델명</th>
+                            <th>설명 / 권장 사양</th>
+                            <th>작업</th>
+                        </tr>
+                    </thead>
+                    <tbody id="model-table-body">
+                        <!-- Dynamic models list -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-modal-refresh">새로고침</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

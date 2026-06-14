@@ -1,4 +1,6 @@
-PyQt6>=6.4.0
+fastapi>=0.110.0
+uvicorn>=0.28.0
+python-multipart>=0.0.9
 reportlab>=3.6.12
 ollama>=0.1.7
 psutil>=5.9.0
