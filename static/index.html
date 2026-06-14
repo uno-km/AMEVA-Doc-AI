@@ -169,6 +169,7 @@
             <div class="chat-input-row">
                 <input type="text" id="chat-input" placeholder="요약된 문서에 대해 질문하세요..." disabled>
                 <button class="btn btn-primary" id="btn-send-chat" disabled>전송</button>
+                <button class="btn btn-secondary" id="btn-rag-settings">⚙️ RAG 설정</button>
             </div>
         </aside>
     </div>
@@ -219,6 +220,73 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="btn-rag-modal-close">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RAG Settings Modal -->
+    <div class="modal" id="modal-rag-settings">
+        <div class="modal-content" style="width: 550px;">
+            <div class="modal-header">
+                <h2>⚙️ 실시간 RAG 제어판 설정</h2>
+                <button class="close-modal" id="modal-rag-settings-close">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 450px; overflow-y: auto;">
+                <div class="rag-setting-item" style="margin-bottom: 20px;">
+                    <div class="setting-label-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-weight: 600; font-size: 0.95rem;">🔄 Chunk Overlap (청크 오버랩)</span>
+                        <div class="setting-input-wrapper" style="display: flex; align-items: center; gap: 8px;">
+                            <input type="number" id="input-chunk-overlap" min="0" max="500" value="100" style="width: 80px; text-align: right; background: rgba(30, 34, 42, 0.8); border: 1px solid var(--border-color); color: #fff; padding: 4px; border-radius: 4px;">
+                            <span class="unit-text" style="font-size: 0.8rem; color: var(--text-muted); width: 100px;">characters</span>
+                        </div>
+                    </div>
+                    <div class="slider-row">
+                        <input type="range" id="slider-chunk-overlap" min="0" max="500" value="100" class="setting-slider" style="width: 100%;">
+                    </div>
+                </div>
+                
+                <div class="rag-setting-item" style="margin-bottom: 20px;">
+                    <div class="setting-label-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-weight: 600; font-size: 0.95rem;">🔍 Top-K (검색 유사 문서 개수)</span>
+                        <div class="setting-input-wrapper" style="display: flex; align-items: center; gap: 8px;">
+                            <input type="number" id="input-top-k" min="1" max="20" value="5" style="width: 80px; text-align: right; background: rgba(30, 34, 42, 0.8); border: 1px solid var(--border-color); color: #fff; padding: 4px; border-radius: 4px;">
+                            <span class="unit-text" style="font-size: 0.8rem; color: var(--text-muted); width: 100px;">개</span>
+                        </div>
+                    </div>
+                    <div class="slider-row">
+                        <input type="range" id="slider-top-k" min="1" max="20" value="5" class="setting-slider" style="width: 100%;">
+                    </div>
+                </div>
+
+                <div class="rag-setting-item" style="margin-bottom: 20px;">
+                    <div class="setting-label-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-weight: 600; font-size: 0.95rem;">🔀 Hybrid Alpha (검색 방식 가중치)</span>
+                        <div class="setting-input-wrapper" style="display: flex; align-items: center; gap: 8px;">
+                            <input type="number" id="input-hybrid-alpha" min="0.0" max="1.0" step="0.05" value="0.7" style="width: 80px; text-align: right; background: rgba(30, 34, 42, 0.8); border: 1px solid var(--border-color); color: #fff; padding: 4px; border-radius: 4px;">
+                            <span class="unit-text" id="hybrid-alpha-desc" style="font-size: 0.8rem; color: var(--text-muted); width: 100px;">0.7 (Dense 위주)</span>
+                        </div>
+                    </div>
+                    <div class="slider-row">
+                        <input type="range" id="slider-hybrid-alpha" min="0.0" max="1.0" step="0.05" value="0.7" class="setting-slider" style="width: 100%;">
+                    </div>
+                </div>
+
+                <div class="rag-setting-item" style="margin-bottom: 20px;">
+                    <div class="setting-label-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-weight: 600; font-size: 0.95rem;">🌡️ LLM Temperature (답변 온도)</span>
+                        <div class="setting-input-wrapper" style="display: flex; align-items: center; gap: 8px;">
+                            <input type="number" id="input-temperature" min="0.0" max="2.0" step="0.05" value="0.2" style="width: 80px; text-align: right; background: rgba(30, 34, 42, 0.8); border: 1px solid var(--border-color); color: #fff; padding: 4px; border-radius: 4px;">
+                            <span class="unit-text" id="temperature-desc" style="font-size: 0.8rem; color: var(--text-muted); width: 100px;">0.2 (Fact 중심)</span>
+                        </div>
+                    </div>
+                    <div class="slider-row">
+                        <input type="range" id="slider-temperature" min="0.0" max="2.0" step="0.05" value="0.2" class="setting-slider" style="width: 100%;">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-rag-settings-cancel">취소</button>
+                <button class="btn btn-accent" id="btn-rag-settings-apply">적용하기</button>
             </div>
         </div>
     </div>

@@ -45,7 +45,24 @@ const elements = {
     chatDisplay: document.getElementById('chat-display'),
     chatInput: document.getElementById('chat-input'),
     btnSendChat: document.getElementById('btn-send-chat'),
-    btnMainLog: document.getElementById('btn-main-log')
+    btnMainLog: document.getElementById('btn-main-log'),
+    
+    // RAG Settings elements
+    btnRagSettings: document.getElementById('btn-rag-settings'),
+    modalRagSettings: document.getElementById('modal-rag-settings'),
+    modalRagSettingsClose: document.getElementById('modal-rag-settings-close'),
+    btnRagSettingsCancel: document.getElementById('btn-rag-settings-cancel'),
+    btnRagSettingsApply: document.getElementById('btn-rag-settings-apply'),
+    inputChunkOverlap: document.getElementById('input-chunk-overlap'),
+    sliderChunkOverlap: document.getElementById('slider-chunk-overlap'),
+    inputTopK: document.getElementById('input-top-k'),
+    sliderTopK: document.getElementById('slider-top-k'),
+    inputHybridAlpha: document.getElementById('input-hybrid-alpha'),
+    sliderHybridAlpha: document.getElementById('slider-hybrid-alpha'),
+    hybridAlphaDesc: document.getElementById('hybrid-alpha-desc'),
+    inputTemperature: document.getElementById('input-temperature'),
+    sliderTemperature: document.getElementById('slider-temperature'),
+    temperatureDesc: document.getElementById('temperature-desc')
 };
 
 // Initialization
@@ -76,6 +93,9 @@ async function initApp() {
     
     // 3. Build Worker UI elements (Tabs & Minimies)
     buildWorkerUI();
+
+    // 4. Fetch RAG Settings
+    await loadRagSettings();
 }
 
 function setupEventListeners() {
@@ -130,6 +150,26 @@ function setupEventListeners() {
     elements.chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendChatMsg();
     });
+
+    // RAG Settings Modal events
+    elements.btnRagSettings.addEventListener('click', () => {
+        elements.modalRagSettings.classList.add('open');
+    });
+    
+    const closeRagSettings = () => {
+        elements.modalRagSettings.classList.remove('open');
+    };
+    
+    elements.modalRagSettingsClose.addEventListener('click', closeRagSettings);
+    elements.btnRagSettingsCancel.addEventListener('click', closeRagSettings);
+    
+    // Slide bar & number field sync logic
+    setupRagSettingSync(elements.sliderChunkOverlap, elements.inputChunkOverlap, null);
+    setupRagSettingSync(elements.sliderTopK, elements.inputTopK, null);
+    setupRagSettingSync(elements.sliderHybridAlpha, elements.inputHybridAlpha, updateHybridAlphaLabel);
+    setupRagSettingSync(elements.sliderTemperature, elements.inputTemperature, updateTemperatureLabel);
+    
+    elements.btnRagSettingsApply.addEventListener('click', applyRagSettings);
 }
 
 // Build Worker Minimies and Tab logs dynamically
@@ -528,6 +568,7 @@ function startTaskExecution() {
     elements.btnRun.innerText = '작업 중지';
     elements.btnRun.style.backgroundColor = '#c0392b';
     elements.btnModelManager.disabled = true;
+    elements.btnRagSettings.disabled = true;
     elements.btnAddFiles.disabled = true;
     elements.btnAddLink.disabled = true;
     elements.btnClear.disabled = true;
@@ -616,6 +657,7 @@ function stopTaskUI() {
     elements.btnRun.innerText = 'AI 변환 시작';
     elements.btnRun.style.backgroundColor = '#d35400';
     elements.btnModelManager.disabled = false;
+    elements.btnRagSettings.disabled = false;
     elements.btnAddFiles.disabled = false;
     elements.btnAddLink.disabled = false;
     elements.btnClear.disabled = false;
@@ -859,3 +901,100 @@ function openRAGModal(src, query) {
     textContainer.innerHTML = highlightedText;
     modal.classList.add('open');
 }
+
+function setupRagSettingSync(slider, input, labelUpdateFn) {
+    slider.addEventListener('input', (e) => {
+        input.value = e.target.value;
+        if (labelUpdateFn) labelUpdateFn(e.target.value);
+    });
+    input.addEventListener('change', (e) => {
+        let val = parseFloat(e.target.value);
+        if (isNaN(val)) val = parseFloat(slider.value);
+        
+        // Clamp values
+        const min = parseFloat(input.min);
+        const max = parseFloat(input.max);
+        if (val < min) val = min;
+        if (val > max) val = max;
+        
+        input.value = val;
+        slider.value = val;
+        if (labelUpdateFn) labelUpdateFn(val);
+    });
+}
+
+function updateHybridAlphaLabel(val) {
+    val = parseFloat(val);
+    let desc = "";
+    if (val === 0.0) desc = "0.0 (Sparse 전용)";
+    else if (val <= 0.4) desc = `${val.toFixed(2)} (Sparse 위주)`;
+    else if (val === 0.5) desc = "0.5 (Hybrid)";
+    else if (val <= 0.9) desc = `${val.toFixed(2)} (Dense 위주)`;
+    else desc = "1.0 (Dense 전용)";
+    elements.hybridAlphaDesc.innerText = desc;
+}
+
+function updateTemperatureLabel(val) {
+    val = parseFloat(val);
+    let desc = "";
+    if (val <= 0.4) desc = `${val.toFixed(2)} (Fact 중심)`;
+    else if (val < 1.0) desc = `${val.toFixed(2)} (균형 모드)`;
+    else desc = `${val.toFixed(2)} (Creativity 중심)`;
+    elements.temperatureDesc.innerText = desc;
+}
+
+async function loadRagSettings() {
+    try {
+        const res = await fetch('/api/rag/settings');
+        const data = await res.json();
+        
+        elements.inputChunkOverlap.value = data.chunk_overlap;
+        elements.sliderChunkOverlap.value = data.chunk_overlap;
+        
+        elements.inputTopK.value = data.top_k;
+        elements.sliderTopK.value = data.top_k;
+        
+        elements.inputHybridAlpha.value = data.hybrid_alpha;
+        elements.sliderHybridAlpha.value = data.hybrid_alpha;
+        updateHybridAlphaLabel(data.hybrid_alpha);
+        
+        elements.inputTemperature.value = data.temperature;
+        elements.sliderTemperature.value = data.temperature;
+        updateTemperatureLabel(data.temperature);
+    } catch (e) {
+        console.error("Failed to load RAG settings", e);
+    }
+}
+
+async function applyRagSettings() {
+    const formData = new FormData();
+    formData.append('chunk_overlap', elements.inputChunkOverlap.value);
+    formData.append('top_k', elements.inputTopK.value);
+    formData.append('hybrid_alpha', elements.inputHybridAlpha.value);
+    formData.append('temperature', elements.inputTemperature.value);
+    
+    try {
+        const res = await fetch('/api/rag/settings', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await res.json();
+        if (result.success) {
+            elements.modalRagSettings.classList.remove('open');
+            appendLog(`<font color='#2ecc71'>✔ RAG 설정 적용 완료 (Overlap: ${result.settings.chunk_overlap}자, Top-K: ${result.settings.top_k}개, Hybrid Alpha: ${result.settings.hybrid_alpha}, Temp: ${result.settings.temperature})</font>`);
+            
+            // If RAG context is already loaded, notify user
+            if (ragContext) {
+                const banner = document.createElement('div');
+                banner.innerHTML = `<hr style='border:1px dashed var(--border-color); margin:10px 0;'><b>[시스템]</b> ⚙️ RAG 실시간 제어 설정이 변경되었습니다. 다음 질문부터 적용됩니다.`;
+                elements.chatDisplay.appendChild(banner);
+                elements.chatDisplay.scrollTop = elements.chatDisplay.scrollHeight;
+            }
+        } else {
+            alert("RAG 설정 적용에 실패했습니다.");
+        }
+    } catch (err) {
+        alert("RAG 설정 적용 중 에러 발생: " + err.message);
+    }
+}
+

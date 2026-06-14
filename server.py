@@ -2,6 +2,7 @@ import os
 import re
 import time
 import json
+import math
 import asyncio
 import threading
 import tempfile
@@ -35,6 +36,47 @@ current_rag_context = ""
 active_websocket = None
 rag_chunks = []
 rag_vector_db = None
+
+# RAG Settings configuration
+rag_settings = {
+    "chunk_overlap": 100,
+    "top_k": 5,
+    "hybrid_alpha": 0.7,
+    "temperature": 0.2
+}
+rag_raw_texts = []
+embedding_cache = {}
+
+def get_embedding(text, model):
+    if text in embedding_cache:
+        return embedding_cache[text]
+    try:
+        response = ollama.embeddings(model=model, prompt=text)
+        vector = response.get('embedding')
+        if vector:
+            embedding_cache[text] = vector
+            return vector
+    except Exception:
+        try:
+            response = ollama.embed(model=model, input=text)
+            vectors = response.get('embeddings')
+            if vectors and len(vectors) > 0:
+                embedding_cache[text] = vectors[0]
+                return vectors[0]
+        except Exception:
+            pass
+    return None
+
+def cosine_similarity(v1, v2):
+    if not v1 or not v2:
+        return 0.0
+    dot = sum(a * b for a, b in zip(v1, v2))
+    norm_a = math.sqrt(sum(a * a for a in v1))
+    norm_b = math.sqrt(sum(b * b for b in v2))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
 
 class SimpleTFIDFIndex:
     def __init__(self, chunks):
@@ -80,32 +122,61 @@ class SimpleTFIDFIndex:
                     vector[token] /= length
             self.chunk_vectors.append(vector)
 
-    def retrieve(self, query, top_k=3):
+    def retrieve(self, query, model=None, top_k=3, hybrid_alpha=0.7):
         import math
-        if not self.chunks or not self.chunk_vectors:
+        if not self.chunks:
             return []
-        query_tokens = self._tokenize(query)
-        query_tf = {}
-        for token in query_tokens:
-            query_tf[token] = query_tf.get(token, 0) + 1
-        query_vector = {}
-        length_sq = 0.0
-        for token, count in query_tf.items():
-            if token in self.vocab:
-                tfidf = count * self.idf[token]
-                query_vector[token] = tfidf
-                length_sq += tfidf ** 2
-        length = math.sqrt(length_sq)
-        if length > 0:
-            for token in query_vector:
-                query_vector[token] /= length
+            
+        # 1. Sparse TF-IDF scores
+        sparse_scores = {}
+        for idx in range(len(self.chunks)):
+            sparse_scores[idx] = 0.0
+            
+        if self.chunk_vectors:
+            query_tokens = self._tokenize(query)
+            query_tf = {}
+            for token in query_tokens:
+                query_tf[token] = query_tf.get(token, 0) + 1
+            query_vector = {}
+            length_sq = 0.0
+            for token, count in query_tf.items():
+                if token in self.vocab:
+                    tfidf = count * self.idf[token]
+                    query_vector[token] = tfidf
+                    length_sq += tfidf ** 2
+            length = math.sqrt(length_sq)
+            if length > 0:
+                for token in query_vector:
+                    query_vector[token] /= length
+            for idx, chunk_vector in enumerate(self.chunk_vectors):
+                dot_product = 0.0
+                for token, val in query_vector.items():
+                    if token in chunk_vector:
+                        dot_product += val * chunk_vector[token]
+                sparse_scores[idx] = dot_product
+
+        # 2. Dense Cosine similarity scores
+        dense_scores = {}
+        if hybrid_alpha > 0.0 and model:
+            query_emb = get_embedding(query, model)
+            if query_emb:
+                for idx, chunk in enumerate(self.chunks):
+                    chunk_emb = get_embedding(chunk, model)
+                    if chunk_emb:
+                        dense_scores[idx] = cosine_similarity(query_emb, chunk_emb)
+                    else:
+                        dense_scores[idx] = 0.0
+            else:
+                hybrid_alpha = 0.0  # Fallback to pure TF-IDF if embedding retrieval fails
+                
+        # 3. Combine scores
         scores = []
-        for idx, chunk_vector in enumerate(self.chunk_vectors):
-            dot_product = 0.0
-            for token, val in query_vector.items():
-                if token in chunk_vector:
-                    dot_product += val * chunk_vector[token]
-            scores.append((idx, dot_product))
+        for idx in range(len(self.chunks)):
+            sparse = sparse_scores.get(idx, 0.0)
+            dense = dense_scores.get(idx, 0.0)
+            score = hybrid_alpha * dense + (1.0 - hybrid_alpha) * sparse
+            scores.append((idx, score))
+            
         scores.sort(key=lambda x: x[1], reverse=True)
         results = []
         for idx, score in scores[:top_k]:
@@ -115,6 +186,7 @@ class SimpleTFIDFIndex:
                 "score": score
             })
         return results
+
 
 # System profiling utility
 def get_hardware_specs():
@@ -273,6 +345,49 @@ def download_link(url: str = Form(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def rebuild_rag_index():
+    global rag_chunks, rag_vector_db
+    if not rag_raw_texts:
+        return
+    
+    rag_chunks = []
+    chunk_size = 800
+    overlap = rag_settings.get("chunk_overlap", 100)
+    
+    for raw_text in rag_raw_texts:
+        start = 0
+        while start < len(raw_text):
+            end = min(start + chunk_size, len(raw_text))
+            rag_chunks.append(raw_text[start:end])
+            if end == len(raw_text):
+                break
+            start += chunk_size - overlap
+            
+    if rag_chunks:
+        rag_vector_db = SimpleTFIDFIndex(rag_chunks)
+
+@app.get("/api/rag/settings")
+def get_rag_settings():
+    return rag_settings
+
+@app.post("/api/rag/settings")
+def update_rag_settings(
+    chunk_overlap: int = Form(...),
+    top_k: int = Form(...),
+    hybrid_alpha: float = Form(...),
+    temperature: float = Form(...)
+):
+    global rag_settings
+    rag_settings["chunk_overlap"] = chunk_overlap
+    rag_settings["top_k"] = top_k
+    rag_settings["hybrid_alpha"] = hybrid_alpha
+    rag_settings["temperature"] = temperature
+    
+    if rag_raw_texts:
+        rebuild_rag_index()
+        
+    return {"success": True, "settings": rag_settings}
+
 # RAG Chat Stream Endpoint
 @app.post("/api/chat")
 async def chat_with_docs(model: str = Form(...), messages: str = Form(...)):
@@ -285,10 +400,15 @@ async def chat_with_docs(model: str = Form(...), messages: str = Form(...)):
             user_query = msg['content']
             break
             
-    # Retrieve top 3 relevant chunks
+    # Retrieve relevant chunks using current settings
     retrieved = []
     if rag_vector_db and user_query:
-        retrieved = rag_vector_db.retrieve(user_query, top_k=3)
+        retrieved = rag_vector_db.retrieve(
+            user_query,
+            model=model,
+            top_k=rag_settings.get("top_k", 5),
+            hybrid_alpha=rag_settings.get("hybrid_alpha", 0.7)
+        )
         
     # Build prompt context
     if retrieved:
@@ -301,7 +421,11 @@ async def chat_with_docs(model: str = Form(...), messages: str = Form(...)):
     async def chat_stream():
         try:
             loop = asyncio.get_event_loop()
-            stream = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=msg_list, stream=True, options={'num_ctx': 8192}))
+            options = {
+                'num_ctx': 8192,
+                'temperature': rag_settings.get("temperature", 0.2)
+            }
+            stream = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=msg_list, stream=True, options=options))
             
             for chunk in stream:
                 content = chunk.get('message', {}).get('content', '')
@@ -316,6 +440,7 @@ async def chat_with_docs(model: str = Form(...), messages: str = Form(...)):
             yield f"\n[채팅 에러: {str(e)}]"
             
     return StreamingResponse(chat_stream(), media_type="text/plain")
+
 
 # Task Management via WebSockets
 @app.websocket("/ws/process")
@@ -446,13 +571,14 @@ async def process_websocket(websocket: WebSocket):
                 await send_to_client("log", f"<font color='#f1c40f'>[보고] ➔ {report_str}<br>&nbsp;&nbsp;&nbsp;╰─ (앱: {mem_usage:.1f}MB | ⚡전력: {power_wh:.4f}Wh | 🪙토큰: {shared_data['total_tokens']:,}T)</font>")
 
     def process_file_conversion(files_data, dest, model, thread_count, do_tts):
-        global current_rag_context, rag_chunks, rag_vector_db
+        global current_rag_context, rag_chunks, rag_vector_db, rag_raw_texts
         import math
         import concurrent.futures
         
         shared_data["is_running"] = True
         rag_chunks = []
         rag_vector_db = None
+        rag_raw_texts = []
         shared_data["start_time"] = time.time()
         shared_data["total_tokens"] = 0
         shared_data["initial_threads"] = thread_count
@@ -482,10 +608,11 @@ async def process_websocket(websocket: WebSocket):
                 
                 asyncio.run_coroutine_threadsafe(send_to_client("log", f"<hr><b>[{file_idx+1}/{len(files_data)}] {filename}</b> 분석 시작"), loop)
                 raw_text = DocumentParser.extract_all_text(target_file)
+                rag_raw_texts.append(raw_text)
                 total_chars = len(raw_text)
                 
                 # Chunk this text and collect for session RAG
-                def chunk_text(text, chunk_size=800, overlap=200):
+                def chunk_text(text, chunk_size=800, overlap=rag_settings.get("chunk_overlap", 100)):
                     chunks = []
                     start = 0
                     if not text:
