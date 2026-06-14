@@ -224,6 +224,7 @@ async def process_websocket(websocket: WebSocket):
     await websocket.accept()
     global active_websocket
     active_websocket = websocket
+    loop = asyncio.get_event_loop()
     
     # Process management state variables
     shared_data = {
@@ -362,7 +363,6 @@ async def process_websocket(websocket: WebSocket):
             worker_states[i] = {'do': False, 'time': time.time(), 'chunk_id': -1, 'current': 0, 'total': 0, 'dead': False}
 
         # Run async monitoring loops in background
-        loop = asyncio.get_event_loop()
         stats_task = asyncio.run_coroutine_threadsafe(stats_monitor_loop(), loop)
         police_task = asyncio.run_coroutine_threadsafe(police_patrol_loop(), loop)
 

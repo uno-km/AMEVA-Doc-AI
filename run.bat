@@ -52,7 +52,7 @@ echo  [STEP 3] 필수 유닛 무장 (Library Components)
 python -m pip install --upgrade pip --quiet
 pip install setuptools --quiet
 
-set "libs=fastapi uvicorn python-multipart reportlab ollama psutil GPUtil python-docx openpyxl python-pptx olefile edge-tts"
+set "libs=fastapi uvicorn python-multipart reportlab ollama psutil GPUtil python-docx openpyxl python-pptx olefile edge-tts websockets"
 
 for %%i in (%libs%) do (
     pip show %%i >nul 2>&1
