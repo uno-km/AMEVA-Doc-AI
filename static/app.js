@@ -376,7 +376,7 @@ async function refreshModalTable() {
             
             // Action cell
             const actionCell = document.createElement('td');
-            actionCell.id = `action-model-${model.name.replace(':', '_')}`;
+            actionCell.id = `action-model-${model.name.replace(/[^a-zA-Z0-9]/g, '_')}`;
             if (isInstalled) {
                 const btn = document.createElement('button');
                 btn.className = 'btn btn-danger';
@@ -420,11 +420,11 @@ async function deleteModel(name) {
 }
 
 async function pullModel(name) {
-    const actionCell = document.getElementById(`action-model-${name.replace(':', '_')}`);
+    const actionCell = document.getElementById(`action-model-${name.replace(/[^a-zA-Z0-9]/g, '_')}`);
     actionCell.innerHTML = `
         <div class="modal-pbar">
-            <div class="modal-pbar-chunk" id="pbar-chunk-${name.replace(':', '_')}" style="width: 0%;"></div>
-            <span class="modal-pbar-text" id="pbar-text-${name.replace(':', '_')}">준비 중...</span>
+            <div class="modal-pbar-chunk" id="pbar-chunk-${name.replace(/[^a-zA-Z0-9]/g, '_')}" style="width: 0%;"></div>
+            <span class="modal-pbar-text" id="pbar-text-${name.replace(/[^a-zA-Z0-9]/g, '_')}">준비 중...</span>
         </div>
     `;
     
@@ -455,8 +455,8 @@ async function pullModel(name) {
                 if (line.startsWith('data: ')) {
                     const data = JSON.parse(line.substring(6));
                     
-                    const progressChunk = document.getElementById(`pbar-chunk-${name.replace(':', '_')}`);
-                    const progressText = document.getElementById(`pbar-text-${name.replace(':', '_')}`);
+                    const progressChunk = document.getElementById(`pbar-chunk-${name.replace(/[^a-zA-Z0-9]/g, '_')}`);
+                    const progressText = document.getElementById(`pbar-text-${name.replace(/[^a-zA-Z0-9]/g, '_')}`);
                     
                     if (data.status === 'progress') {
                         if (progressChunk) progressChunk.style.width = `${data.percent}%`;

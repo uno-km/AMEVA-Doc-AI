@@ -91,14 +91,27 @@ async def pull_model(model_name: str = Form(...)):
     async def event_generator():
         try:
             yield f"data: {json.dumps({'status': 'start', 'message': f'{model_name} 다운로드 시작...'})}\n\n"
-            # Since ollama.pull is blocking, run in executor
-            loop = asyncio.get_event_loop()
-            def sync_pull():
-                return list(ollama.pull(model_name, stream=True))
             
-            # Streaming pull response
-            stream = await loop.run_in_executor(None, lambda: ollama.pull(model_name, stream=True))
-            for progress in stream:
+            loop = asyncio.get_event_loop()
+            q = asyncio.Queue()
+            
+            def sync_pull():
+                try:
+                    for progress in ollama.pull(model_name, stream=True):
+                        loop.call_soon_threadsafe(q.put_nowait, progress)
+                    loop.call_soon_threadsafe(q.put_nowait, None)
+                except Exception as e:
+                    loop.call_soon_threadsafe(q.put_nowait, e)
+            
+            loop.run_in_executor(None, sync_pull)
+            
+            while True:
+                progress = await q.get()
+                if progress is None:
+                    break
+                if isinstance(progress, Exception):
+                    raise progress
+                
                 percent = 0.0
                 if 'total' in progress and 'completed' in progress:
                     percent = (progress['completed'] / progress['total']) * 100
