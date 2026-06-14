@@ -203,6 +203,26 @@
             </div>
         </div>
     </div>
+
+    <!-- RAG Source Viewer Modal -->
+    <div class="modal" id="modal-rag-source">
+        <div class="modal-content" style="width: 700px;">
+            <div class="modal-header">
+                <h2 id="rag-modal-title">출처 상세보기</h2>
+                <button class="close-modal" id="modal-rag-close">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 450px;">
+                <div id="rag-modal-score" style="font-size: 0.8rem; color: var(--color-warning); margin-bottom: 10px; font-weight: bold;"></div>
+                <div id="rag-modal-text" style="white-space: pre-wrap; font-family: inherit; font-size: 0.9rem; line-height: 1.6; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); overflow-y: auto; max-height: 350px;">
+                    <!-- Highlighted source text goes here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-rag-modal-close">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>

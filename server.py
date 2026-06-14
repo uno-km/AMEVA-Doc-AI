@@ -33,6 +33,88 @@ app.add_middleware(
 # Global variables for system stats and tracking
 current_rag_context = ""
 active_websocket = None
+rag_chunks = []
+rag_vector_db = None
+
+class SimpleTFIDFIndex:
+    def __init__(self, chunks):
+        self.chunks = chunks
+        self.vocab = {}
+        self.idf = {}
+        self.chunk_vectors = []
+        self._build_index()
+
+    def _tokenize(self, text):
+        import re
+        words = re.findall(r'[가-힣a-zA-Z0-9]+', text.lower())
+        return words
+
+    def _build_index(self):
+        import math
+        if not self.chunks:
+            return
+        doc_count = len(self.chunks)
+        df = {}
+        chunk_tfs = []
+        for chunk in self.chunks:
+            tokens = self._tokenize(chunk)
+            tf = {}
+            for token in tokens:
+                tf[token] = tf.get(token, 0) + 1
+            chunk_tfs.append(tf)
+            for token in tf.keys():
+                df[token] = df.get(token, 0) + 1
+        for token, count in df.items():
+            self.vocab[token] = len(self.vocab)
+            self.idf[token] = math.log((1 + doc_count) / (1 + count)) + 1
+        for tf in chunk_tfs:
+            vector = {}
+            length_sq = 0.0
+            for token, count in tf.items():
+                tfidf = count * self.idf[token]
+                vector[token] = tfidf
+                length_sq += tfidf ** 2
+            length = math.sqrt(length_sq)
+            if length > 0:
+                for token in vector:
+                    vector[token] /= length
+            self.chunk_vectors.append(vector)
+
+    def retrieve(self, query, top_k=3):
+        import math
+        if not self.chunks or not self.chunk_vectors:
+            return []
+        query_tokens = self._tokenize(query)
+        query_tf = {}
+        for token in query_tokens:
+            query_tf[token] = query_tf.get(token, 0) + 1
+        query_vector = {}
+        length_sq = 0.0
+        for token, count in query_tf.items():
+            if token in self.vocab:
+                tfidf = count * self.idf[token]
+                query_vector[token] = tfidf
+                length_sq += tfidf ** 2
+        length = math.sqrt(length_sq)
+        if length > 0:
+            for token in query_vector:
+                query_vector[token] /= length
+        scores = []
+        for idx, chunk_vector in enumerate(self.chunk_vectors):
+            dot_product = 0.0
+            for token, val in query_vector.items():
+                if token in chunk_vector:
+                    dot_product += val * chunk_vector[token]
+            scores.append((idx, dot_product))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        results = []
+        for idx, score in scores[:top_k]:
+            results.append({
+                "index": idx,
+                "text": self.chunks[idx],
+                "score": score
+            })
+        return results
 
 # System profiling utility
 def get_hardware_specs():
@@ -196,16 +278,28 @@ def download_link(url: str = Form(...)):
 async def chat_with_docs(model: str = Form(...), messages: str = Form(...)):
     msg_list = json.loads(messages)
     
+    # Extract the user's last message to search the Vector DB
+    user_query = ""
+    for msg in reversed(msg_list):
+        if msg['role'] == 'user':
+            user_query = msg['content']
+            break
+            
+    # Retrieve top 3 relevant chunks
+    retrieved = []
+    if rag_vector_db and user_query:
+        retrieved = rag_vector_db.retrieve(user_query, top_k=3)
+        
+    # Build prompt context
+    if retrieved:
+        context_text = "\n\n".join([f"[참조 {i+1}] {item['text']}" for i, item in enumerate(retrieved)])
+        if len(msg_list) > 0:
+            last_msg = msg_list[-1]
+            if last_msg['role'] == 'user':
+                last_msg['content'] = f"다음은 문서에서 검색된 [참조 내용]입니다. 이 내용을 바탕으로 질문에 답변해 주세요. 문서에 명확히 기재된 내용만 사용하고, 없는 내용은 모른다고 답변하세요. 답변 하단에 출처 인덱스를 매기거나 직접 출처 내용을 적지 마세요. (출처 링크는 시스템에서 처리합니다)\n\n[참조 내용]\n{context_text}\n\n[질문]\n{user_query}"
+    
     async def chat_stream():
         try:
-            # Injecting RAG context to the first prompt
-            global current_rag_context
-            if len(msg_list) > 0 and msg_list[0]['role'] == 'user' and current_rag_context:
-                # If first message, prepend context
-                first_prompt = msg_list[0]['content']
-                if "다음은 내가 제공하는 [문서 내용]이야" not in first_prompt:
-                    msg_list[0]['content'] = f"다음은 내가 제공하는 [문서 내용]이야. 이 내용을 바탕으로 내 [질문]에 답변해줘. 문서에 없는 내용은 모른다고 대답해.\n\n[문서 내용]\n{current_rag_context}\n\n[질문]\n{first_prompt}"
-            
             loop = asyncio.get_event_loop()
             stream = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=msg_list, stream=True, options={'num_ctx': 8192}))
             
@@ -213,6 +307,11 @@ async def chat_with_docs(model: str = Form(...), messages: str = Form(...)):
                 content = chunk.get('message', {}).get('content', '')
                 yield content
                 await asyncio.sleep(0.01)
+                
+            # Stream the retrieved sources at the end
+            if retrieved:
+                sources_data = [{"index": item["index"], "text": item["text"], "score": item["score"]} for item in retrieved]
+                yield f"\n__RAG_SOURCES__{json.dumps(sources_data, ensure_ascii=False)}"
         except Exception as e:
             yield f"\n[채팅 에러: {str(e)}]"
             
@@ -347,11 +446,13 @@ async def process_websocket(websocket: WebSocket):
                 await send_to_client("log", f"<font color='#f1c40f'>[보고] ➔ {report_str}<br>&nbsp;&nbsp;&nbsp;╰─ (앱: {mem_usage:.1f}MB | ⚡전력: {power_wh:.4f}Wh | 🪙토큰: {shared_data['total_tokens']:,}T)</font>")
 
     def process_file_conversion(files_data, dest, model, thread_count, do_tts):
-        global current_rag_context
+        global current_rag_context, rag_chunks, rag_vector_db
         import math
         import concurrent.futures
         
         shared_data["is_running"] = True
+        rag_chunks = []
+        rag_vector_db = None
         shared_data["start_time"] = time.time()
         shared_data["total_tokens"] = 0
         shared_data["initial_threads"] = thread_count
@@ -382,6 +483,23 @@ async def process_websocket(websocket: WebSocket):
                 asyncio.run_coroutine_threadsafe(send_to_client("log", f"<hr><b>[{file_idx+1}/{len(files_data)}] {filename}</b> 분석 시작"), loop)
                 raw_text = DocumentParser.extract_all_text(target_file)
                 total_chars = len(raw_text)
+                
+                # Chunk this text and collect for session RAG
+                def chunk_text(text, chunk_size=800, overlap=200):
+                    chunks = []
+                    start = 0
+                    if not text:
+                        return chunks
+                    while start < len(text):
+                        end = min(start + chunk_size, len(text))
+                        chunks.append(text[start:end])
+                        if end == len(text):
+                            break
+                        start += chunk_size - overlap
+                    return chunks
+                
+                file_chunks = chunk_text(raw_text)
+                rag_chunks.extend(file_chunks)
                 
                 if total_chars == 0:
                     raise Exception("텍스트를 추출하지 못했습니다.")
@@ -590,6 +708,9 @@ async def process_websocket(websocket: WebSocket):
                 asyncio.run_coroutine_threadsafe(send_to_client("status_msg", "🔴 에러 발생: 작업 중지"), loop)
                 break
                 
+        if rag_chunks:
+            rag_vector_db = SimpleTFIDFIndex(rag_chunks)
+            
         shared_data["is_running"] = False
         asyncio.run_coroutine_threadsafe(send_to_client("finished", {"success_count": success_count}), loop)
 

@@ -91,6 +91,17 @@ function setupEventListeners() {
         refreshModalTable();
     });
 
+    // RAG Source Modal Close
+    const modalRagSource = document.getElementById('modal-rag-source');
+    const modalRagClose = document.getElementById('modal-rag-close');
+    const btnRagModalClose = document.getElementById('btn-rag-modal-close');
+    if (modalRagClose) {
+        modalRagClose.addEventListener('click', () => modalRagSource.classList.remove('open'));
+    }
+    if (btnRagModalClose) {
+        btnRagModalClose.addEventListener('click', () => modalRagSource.classList.remove('open'));
+    }
+
     // File input actions
     elements.btnAddFiles.addEventListener('click', () => elements.fileInputRaw.click());
     elements.fileInputRaw.addEventListener('change', handleFileSelection);
@@ -737,6 +748,8 @@ async function sendChatMsg() {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let replyText = '';
+        let cleanReply = '';
+        let sources = null;
         
         while (true) {
             const { value, done } = await reader.read();
@@ -744,11 +757,39 @@ async function sendChatMsg() {
             
             const text = decoder.decode(value);
             replyText += text;
-            aiBubble.innerText = replyText;
+            
+            if (replyText.includes('__RAG_SOURCES__')) {
+                const parts = replyText.split('__RAG_SOURCES__');
+                cleanReply = parts[0].trim();
+                aiBubble.innerText = cleanReply;
+                try {
+                    sources = JSON.parse(parts[1].trim());
+                } catch (e) {
+                    // JSON parsing might be incomplete during stream
+                }
+            } else {
+                aiBubble.innerText = replyText;
+            }
             elements.chatDisplay.scrollTop = elements.chatDisplay.scrollHeight;
         }
         
-        chatHistory.push({ role: 'assistant', content: replyText });
+        // Final parsing check
+        if (replyText.includes('__RAG_SOURCES__')) {
+            const parts = replyText.split('__RAG_SOURCES__');
+            cleanReply = parts[0].trim();
+            aiBubble.innerText = cleanReply;
+            try {
+                sources = JSON.parse(parts[1].trim());
+                if (sources && sources.length > 0) {
+                    renderSources(aiBubble, sources, query);
+                }
+            } catch (e) {
+                console.error("Failed to parse sources", e);
+            }
+            chatHistory.push({ role: 'assistant', content: cleanReply });
+        } else {
+            chatHistory.push({ role: 'assistant', content: replyText });
+        }
     } catch (err) {
         aiBubble.innerText = `[대답 생성 중 오류 발생: ${err.message}]`;
     } finally {
@@ -756,4 +797,65 @@ async function sendChatMsg() {
         elements.btnSendChat.disabled = false;
         elements.chatInput.focus();
     }
+}
+
+function renderSources(bubbleElement, sources, query) {
+    const sourcesContainer = document.createElement('div');
+    sourcesContainer.className = 'chat-sources';
+    sourcesContainer.style.marginTop = '8px';
+    sourcesContainer.style.paddingTop = '6px';
+    sourcesContainer.style.borderTop = '1px dashed rgba(255,255,255,0.1)';
+    sourcesContainer.style.fontSize = '0.75rem';
+    sourcesContainer.style.display = 'flex';
+    sourcesContainer.style.gap = '8px';
+    sourcesContainer.style.flexWrap = 'wrap';
+    
+    const label = document.createElement('span');
+    label.style.color = 'var(--text-muted)';
+    label.innerText = '출처: ';
+    sourcesContainer.appendChild(label);
+    
+    sources.forEach((src, idx) => {
+        const link = document.createElement('a');
+        link.href = '#';
+        link.style.color = 'var(--color-primary)';
+        link.style.textDecoration = 'underline';
+        link.style.fontWeight = 'bold';
+        link.innerText = `[출처 ${idx + 1}]`;
+        link.onclick = (e) => {
+            e.preventDefault();
+            openRAGModal(src, query);
+        };
+        sourcesContainer.appendChild(link);
+    });
+    
+    bubbleElement.appendChild(sourcesContainer);
+}
+
+function openRAGModal(src, query) {
+    const modal = document.getElementById('modal-rag-source');
+    const textContainer = document.getElementById('rag-modal-text');
+    const scoreContainer = document.getElementById('rag-modal-score');
+    const title = document.getElementById('rag-modal-title');
+    
+    title.innerText = `출처 [인덱스 #${src.index + 1}]`;
+    scoreContainer.innerText = `유사도 점수: ${(src.score * 100).toFixed(1)}%`;
+    
+    // Highlight matched words from the query
+    let highlightedText = src.text;
+    
+    const terms = query.toLowerCase().match(/[가-힣a-zA-Z0-9]+/g);
+    if (terms) {
+        const uniqueTerms = [...new Set(terms)].sort((a, b) => b.length - a.length);
+        
+        uniqueTerms.forEach(term => {
+            if (term.length < 2) return;
+            const escapedTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const regex = new RegExp(`(${escapedTerm})`, 'gi');
+            highlightedText = highlightedText.replace(regex, '<mark style="background-color: rgba(241, 196, 15, 0.4); color: #fff; padding: 2px 4px; border-radius: 3px; border-bottom: 2px solid #f1c40f;">$1</mark>');
+        });
+    }
+    
+    textContainer.innerHTML = highlightedText;
+    modal.classList.add('open');
 }
