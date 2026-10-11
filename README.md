@@ -29,7 +29,7 @@
 
 ## 3. Developer's Note (Why This is a Masterpiece)
 
-이 프로젝트는 단순한 API 래퍼(Wrapper) 봇이 아닙니다. **한정된 로컬 자원(VRAM, RAM)을 극한까지 쥐어짜 내는 정밀한 엔지니어링의 결과물**입니다.
+이 프로젝트는 단순한 API 래퍼(Wrapper) 봇이 아닙니다. **한정된 로컬 자원(VRAM, RAM)을 효율적으로 운용하는 정밀한 엔지니어링의 결과물**입니다.
 * **Dynamic Soft-Scaling:** 랩탑의 전원 케이블이 뽑히는 순간을 감지하여, 작동 중인 멀티 스레드(미니미)들을 안전하게 대기 상태로 전환하고 작업을 이관합니다. (데이터 유실 0%)
 * **VRAM Protection:** AI 요약과 RAG 채팅이 동시에 VRAM을 점유하여 시스템이 뻗는(OOM) 현상을 막기 위해, 완벽한 턴제(Turn-based) 락킹 시스템을 구현했습니다.
 * **Zero-Cost TTS:** 무거운 로컬 TTS 모델 대신 마이크로소프트의 Edge-TTS(비동기 호출)를 백그라운드에 연동하여 VRAM 소모 없이 고품질 오디오북을 생성합니다.
@@ -41,7 +41,7 @@
 
 ## 4. 핵심 킬러 피처 (Killer Features)
 
-1.  ** 극한의 문서 파싱 & 변환**
+1.  ** 고성능 문서 파싱 & 변환**
     * 지원 포맷: `HWP`, `HWPX`, `DOCX`, `XLSX`, `PPTX`
     * 찌그러진 표, 빈칸 데이터도 Markdown 문법을 유지하며 깔끔하게 텍스트로 추출하고 PDF로 렌더링합니다.
 2.  ** 분산형 멀티스레드 AI 요약 (Multi-threading)**
